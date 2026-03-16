@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+
+// Trabajador - Almacena la información de los trabajadores
+model Trabajador {
+  idPersona    Int          @id // Código único del trabajador (ID_PERSONA)
+  nombre       String       // Nombre completo del trabajador
+  entregas     EntregaEPP[] // Relación con las entregas de EPP
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+// EntregaEPP - Registro de entrega de Equipos de Protección Personal
+model EntregaEPP {
+  id           String     @id @default(cuid())
+  fecha        DateTime   // Fecha de entrega
+  trabajadorId Int        // ID_PERSONA del trabajador
+  producto     String     // Nombre del EPP entregado
+  cantidad     Int        // Número de unidades entregadas
+  trabajador   Trabajador @relation(fields: [trabajadorId], references: [idPersona])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Índice único para evitar duplicados: misma fecha, trabajador, producto
+  @@unique([fecha, trabajadorId, producto])
+}
+
+// Configuración del sistema
+model Configuracion {
+  id        String   @id @default(cuid())
+  clave     String   @unique
+  valor     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
