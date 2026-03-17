@@ -127,6 +127,7 @@ export default function LoginPage() {
         </CardContent>
         <CardFooter className="flex flex-col space-y-2 text-center text-xs text-slate-500">
           <p>Solo personal autorizado - Departamento de SSO</p>
+          <span className="opacity-30">Versión 1.0.3 - Sincronizado: {new Date().toLocaleTimeString()}</span>
         </CardFooter>
       </Card>
     </div>
