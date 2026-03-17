@@ -157,10 +157,7 @@ export async function POST(request: NextRequest) {
       processedData.push({ fecha, idPersona, nombrePersona, producto, cantidad });
     }
 
-    const now = new Date().toISOString();
-
-    // ── FASE 3: INSERT OR IGNORE de trabajadores por lotes (SQL nativo SQLite) ──
-    // NOTA: Prisma+SQLite NO soporta skipDuplicates, usamos INSERT OR IGNORE nativo
+    // ── FASE 3: Crear trabajadores (Prisma createMany soporta skipDuplicates en PostgreSQL) ──
     const trabajadoresMap = new Map<number, string>();
     for (const row of processedData) {
       if (!trabajadoresMap.has(row.idPersona)) {
@@ -168,25 +165,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const trabajadoresArray = Array.from(trabajadoresMap.entries());
-    const BATCH = 150; // 150 registros × columnas = bien por debajo del límite SQLite
+    const trabajadoresData = Array.from(trabajadoresMap.entries()).map(([id, nombre]) => ({
+      idPersona: id,
+      nombre: nombre
+    }));
 
     const countTrabAntes = await db.trabajador.count();
-
-    for (let i = 0; i < trabajadoresArray.length; i += BATCH) {
-      const chunk = trabajadoresArray.slice(i, i + BATCH);
-      const values = chunk
-        .map(([id, nombre]) => `(${id}, '${esc(nombre)}', '${now}', '${now}')`)
-        .join(', ');
-      await db.$executeRawUnsafe(
-        `INSERT OR IGNORE INTO "Trabajador" ("idPersona","nombre","createdAt","updatedAt") VALUES ${values}`
-      );
-    }
+    
+    await db.trabajador.createMany({
+      data: trabajadoresData,
+      skipDuplicates: true
+    });
 
     const countTrabDespues = await db.trabajador.count();
     const trabajadoresInsertados = countTrabDespues - countTrabAntes;
 
-    // ── FASE 4: INSERT OR IGNORE de entregas por lotes ──
+    // ── FASE 4: Crear entregas ──
     const entregasMap = new Map<string, { fecha: Date; trabajadorId: number; producto: string; cantidad: number }>();
     for (const row of processedData) {
       const key = `${row.fecha.getTime()}-${row.idPersona}-${row.producto}`;
@@ -200,22 +194,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const entregasArray = Array.from(entregasMap.values());
+    const entregasData = Array.from(entregasMap.values()).map(e => ({
+      fecha: e.fecha,
+      trabajadorId: e.trabajadorId,
+      producto: e.producto,
+      cantidad: e.cantidad
+    }));
+
     const countEntAntes = await db.entregaEPP.count();
 
-    for (let i = 0; i < entregasArray.length; i += BATCH) {
-      const chunk = entregasArray.slice(i, i + BATCH);
-      const values = chunk
-        .map(e => {
-          const id = crypto.randomUUID();
-          const fechaIso = e.fecha.toISOString();
-          return `('${id}','${fechaIso}',${e.trabajadorId},'${esc(e.producto)}',${e.cantidad},'${now}','${now}')`;
-        })
-        .join(', ');
-      await db.$executeRawUnsafe(
-        `INSERT OR IGNORE INTO "EntregaEPP" ("id","fecha","trabajadorId","producto","cantidad","createdAt","updatedAt") VALUES ${values}`
-      );
-    }
+    await db.entregaEPP.createMany({
+      data: entregasData,
+      skipDuplicates: true
+    });
 
     const countEntDespues = await db.entregaEPP.count();
     const entregasInsertadas = countEntDespues - countEntAntes;
